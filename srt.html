@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>SRT LCD 안내화면</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet" />
+  <!-- 나눔바른고딕 웹 글꼴 (PC에 설치돼 있으면 그것을 먼저 씀) -->
+  <link href="https://cdn.jsdelivr.net/gh/moonspam/NanumBarunGothic@latest/nanumbarungothicsubset.css" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/srt.css" />
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body class="srt">
+  <div id="viewport">
+    <div id="stage">
+      <!-- 3D (선로·열차, 지도, 지도 위 배경) -->
+      <canvas id="gl"></canvas>
+      <!-- 위쪽 구름 띠 -->
+      <div id="clouds"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <!-- 지도 화면: 노선 선·역 이름 (3D 지도 위에 겹침) -->
+      <svg id="mapRoute"></svg>
+      <div id="mapLabels"></div>
+      <!-- 리본 화살표 (처음 모이는 리본 · 지도 화면 리본) -->
+      <svg id="ribbons"></svg>
+      <!-- 줄무늬 전환 -->
+      <div id="wipe"></div>
+      <!-- 지도 화면 글씨 -->
+      <div id="mapText" class="content-box">
+        <div class="mt-title"><span class="guide-label">정차역 안내</span><div class="logo srt-logo"></div></div>
+        <div class="mt-station"></div>
+      </div>
+      <!-- 깃발 (출발 / 도착) -->
+      <div id="flagLayer" class="content-box"></div>
+      <!-- 정차역 링 + 오른쪽 노선 띠 -->
+      <div id="srtGuide" class="content-box"></div>
+      <!-- 오른쪽 위: 정차역 안내 + SRT -->
+      <div id="corner"><span class="guide-label">정차역 안내</span><div class="logo srt-logo"></div></div>
+      <!-- 흰 안개 (장면 전환) -->
+      <div id="fog"></div>
+      <!-- 로고 화면 -->
+      <div id="logoScreen"><div class="logo sr-logo big"></div></div>
+      <!-- 안내문 -->
+      <section id="srtNotice"><div class="content-box nt-box"></div></section>
+      <div class="logo sr-logo corner-sr"></div>
+      <div id="flash"></div>
+      <div id="dim"></div>
+      <div id="clock" class="srt-clock"><span class="d"></span> <span class="t"></span></div>
+    </div>
+  </div>
+  <script type="module" src="js/srt/main.js"></script>
+</body>
+</html>

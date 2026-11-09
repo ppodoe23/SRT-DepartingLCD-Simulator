@@ -1,0 +1,153 @@
+/* SRT 버전 (srt.html) — 공통 style.css 위에 덮어씀
+   기준 크기: 실제 SRT 객실 화면 비율(4:3) → 콘텐츠 상자 1024×768 */
+
+/* 글꼴: 나눔바른고딕(대부분), 맑은 고딕('정차역 안내')
+   PC에 설치된 글꼴 → fonts/ 폴더의 파일 → 웹 글꼴(jsDelivr) 순서 */
+@font-face { font-family: 'NanumBarunLocal'; font-weight: 300;
+  src: local('NanumBarunGothic Light'), local('NanumBarunGothicLight'), local('나눔바른고딕 Light'), url('../fonts/NanumBarunGothicLight.ttf') format('truetype'); }
+@font-face { font-family: 'NanumBarunLocal'; font-weight: 400;
+  src: local('NanumBarunGothic'), local('나눔바른고딕'), url('../fonts/NanumBarunGothic.ttf') format('truetype'); }
+@font-face { font-family: 'NanumBarunLocal'; font-weight: 700 900;
+  src: local('NanumBarunGothic Bold'), local('NanumBarunGothicBold'), local('나눔바른고딕 Bold'), url('../fonts/NanumBarunGothicBold.ttf') format('truetype'); }
+@font-face { font-family: 'MalgunLocal';
+  src: local('Malgun Gothic'), local('맑은 고딕'), url('../fonts/malgun.ttf') format('truetype'); }
+
+body.srt { --ng: 'NanumBarunLocal', 'NanumBarunGothic', 'Noto Sans KR', 'Malgun Gothic', sans-serif; --bi: #4B2F48; --pink: #d0378f; font-family: var(--ng); }
+body.srt #stage { background: #e8e9ec; }
+.guide-label { font-family: 'MalgunLocal', 'Malgun Gothic', '맑은 고딕', var(--ng); }
+
+#gl, #clouds, #mapRoute, #mapLabels, #ribbons, #wipe, #mapText, #flagLayer, #srtGuide, #corner, #fog, #logoScreen, #srtNotice, .corner-sr { pointer-events: none; }
+
+/* 로고 (config.assets). 이미지가 없으면 글자로 대신 표시
+   SR BI(.srt-logo)는 흰색 SVG → 마스크로 칠해 #4B2F48 로 보이게 함 */
+.logo { background: center / contain no-repeat; }
+.logo.tinted { background: var(--bi) !important; -webkit-mask: var(--logo) center / contain no-repeat; mask: var(--logo) center / contain no-repeat; }
+.logo.missing { display: flex; align-items: center; justify-content: center; font-family: var(--ng); font-weight: 800; color: var(--bi); font-style: italic; }
+.sr-logo.missing { color: #1d4aa8; font-style: normal; }
+
+/* 오른쪽 위 날짜·시각 */
+body.srt #clock.srt-clock {
+  left: auto; right: 14px; top: 4px; bottom: auto; width: auto; height: auto; text-align: right;
+  color: #3a3d42; font-family: var(--ng); font-size: 15px; font-weight: 700; text-shadow: none; letter-spacing: 0;
+}
+body.srt #clock.srt-clock.on-dark { color: #fff; }
+
+/* SR 로고 화면 (흰 바탕 가운데) */
+#logoScreen { background: #f7f7f7; display: flex; align-items: center; justify-content: center; opacity: 0; }
+#logoScreen .big { width: 172px; height: 62px; font-size: 44px; opacity: 0; }
+
+/* 왼쪽 아래 SR 로고 */
+.corner-sr { inset: auto auto 26px 36px !important; width: 118px; height: 44px; font-size: 26px; opacity: 0; }
+
+/* 흰 안개 */
+#fog { background: #eef0f2; opacity: 0; }
+
+/* 위쪽 구름 띠 */
+#clouds { opacity: 0; overflow: hidden; }
+#clouds::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 34%; background: linear-gradient(180deg, rgba(196,203,212,.75), rgba(226,230,236,.45) 45%, rgba(244,245,247,0)); }
+#clouds i { position: absolute; top: -30px; height: 120px; border-radius: 50%; background: radial-gradient(closest-side, rgba(255,255,255,.95), rgba(255,255,255,.75) 60%, rgba(255,255,255,0)); animation: srtcloud 80s linear infinite alternate; }
+#clouds i:nth-child(1) { left: -6%; width: 30%; top: -8px; }
+#clouds i:nth-child(2) { left: 16%; width: 24%; top: 34px; height: 70px; opacity: .85; animation-duration: 95s; }
+#clouds i:nth-child(3) { left: 36%; width: 32%; top: -28px; }
+#clouds i:nth-child(4) { left: 56%; width: 22%; top: 26px; height: 80px; opacity: .8; animation-duration: 70s; }
+#clouds i:nth-child(5) { left: 72%; width: 30%; top: -18px; }
+#clouds i:nth-child(6) { left: 46%; width: 18%; top: 62px; height: 46px; opacity: .7; animation-duration: 60s; }
+@keyframes srtcloud { from { transform: translateX(-24px); } to { transform: translateX(30px); } }
+
+/* 리본 · 줄무늬 전환 · 지도 노선 */
+#ribbons, #mapRoute { width: 100%; height: 100%; overflow: visible; }
+#wipe { overflow: hidden; }
+#wipe i { position: absolute; left: 0; width: 140%; transform: translateX(110%); }
+#mapRoute, #mapLabels, #ribbons { opacity: 0; }
+
+/* 지도 위 역 이름 */
+.ml { position: absolute; left: 0; top: 0; white-space: nowrap; font-family: var(--ng); transform-origin: 0 50%; opacity: 0; }
+.ml.txt { font-size: 12px; font-weight: 700; color: #8b8f96; text-shadow: 0 0 3px #fff, 0 0 3px #fff; }
+.pill { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 10px 0 4px; border-radius: 11px; background: var(--pink); color: #fff; font-family: var(--ng); font-weight: 700; font-size: 12px; box-shadow: 0 1px 2px rgba(120,20,70,.25); }
+.pill::before { content: ''; width: 9px; height: 9px; border-radius: 50%; border: 3px solid #fff; box-sizing: content-box; flex: none; }
+
+/* 지도 화면 글씨 */
+#mapText { opacity: 0; }
+.mt-title { position: absolute; left: 136px; top: 230px; width: 240px; text-align: center; opacity: 0; }
+.mt-title .guide-label { font-size: 28px; color: #4d4f54; display: block; margin-bottom: 2px; letter-spacing: 1px; }
+.mt-title .logo { width: 232px; height: 64px; margin: 0 auto; font-size: 58px; }
+.mt-station { position: absolute; right: 32px; bottom: 26px; font-size: 62px; font-weight: 400; color: rgba(214,72,150,.82); letter-spacing: 3px; white-space: nowrap; }
+.mt-station span { position: absolute; right: 0; bottom: 0; }
+
+/* 오른쪽 위: 정차역 안내 + SRT */
+#corner { inset: auto; right: 22px; top: 86px; width: 230px; text-align: right; opacity: 0; }
+#corner .guide-label { display: block; font-size: 25px; color: #4f5156; letter-spacing: 1px; margin-right: 6px; opacity: 0; }
+#corner .logo { width: 226px; height: 62px; margin-left: auto; font-size: 54px; background-position: right center; opacity: 0; }
+
+/* 깃발 (2D) */
+#flagLayer { opacity: 1; }
+.fl { position: absolute; left: 0; top: 0; width: 1024px; height: 768px; opacity: 0; }
+.fl-pole { position: absolute; width: 10px; background: linear-gradient(90deg, #8d9096, #c9ccd1 45%, #85888e); border-radius: 2px; }
+.fl-cap { position: absolute; width: 18px; height: 26px; border-radius: 4px; background: linear-gradient(90deg, #7f8288, #c3c6cb 50%, #7f8288); }
+.fl-arm { position: absolute; height: 8px; background: linear-gradient(180deg, #c4c7cc, #8e9197); border-radius: 3px; }
+.fl-hook { position: absolute; width: 4px; height: 22px; background: #8e9197; border-radius: 2px; }
+.fl-base { position: absolute; width: 28px; height: 32px; border-radius: 3px; background: linear-gradient(90deg, #e58fc4, #f6c6e2 50%, #e083bd); box-shadow: 0 3px 6px rgba(180,60,130,.25); }
+.fl-banner { position: absolute; overflow: hidden; box-shadow: 0 6px 18px rgba(80,60,110,.18); }
+.fl-banner canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.fl-text { position: absolute; inset: 0; color: #fff; font-family: var(--ng); opacity: 0; }
+.fl-text > div { position: absolute; left: 0; right: 0; text-align: center; transform: translateY(-50%); white-space: nowrap; }
+.fl-kind { font-size: 21px; font-weight: 400; letter-spacing: 1px; }
+.fl-kind b { font-weight: 400; margin-right: 8px; }
+.fl-name { font-size: 70px; font-weight: 400; letter-spacing: 2px; }
+.fl-en { font-size: 32px; font-weight: 700; }
+.fl-line { height: 1px; background: rgba(255,255,255,.35); left: 28px !important; right: 28px !important; }
+.fl-tkind { font-size: 20px; font-weight: 400; }
+.fl-tkind b { font-weight: 400; margin-right: 6px; }
+.fl-time { display: flex; align-items: center; justify-content: center; gap: 22px; }
+.fl-time .t { font-size: 86px; font-weight: 300; letter-spacing: 2px; line-height: 1; }
+.fl-time .ap { display: flex; flex-direction: column; font-size: 29px; line-height: 1.12; text-align: center; }
+
+/* 정차역 링 */
+#srtGuide { opacity: 1; }
+.rg-stage { position: absolute; left: 0; top: 0; width: 1024px; height: 768px; }
+.rg-unit { position: absolute; left: 88px; top: 85px; width: 600px; height: 600px; opacity: 0; }
+.rg-unit > * { position: absolute; inset: 0; }
+.rg-disc { inset: 42px; border-radius: 50%; background: radial-gradient(circle, #ffffff 0%, #ffffff 78%, #f2f3f5 100%); box-shadow: 0 0 0 1px rgba(205,210,218,.65), 0 4px 14px rgba(120,130,150,.12); }
+.rg-dots { inset: 53px; border-radius: 50%; border: 2px dotted #b8bdc6; }
+.rg-arcs { will-change: transform; }
+.rg-arcs i { position: absolute; inset: 0; -webkit-mask: var(--rmask) center / 100% 100% no-repeat; mask: var(--rmask) center / 100% 100% no-repeat; }
+.rg-arcs.pink i { background: conic-gradient(from 0deg, #b52d93, #d3489f 25%, #e06aae 45%, #c93a99 70%, #b52d93); }
+.rg-arcs.blue i { background: conic-gradient(from 0deg, #3e8fd4, #5aa6e0 30%, #84c3ec 50%, #5aa6e0 75%, #3e8fd4); }
+.rg-arcs.mix i { background: conic-gradient(from 15deg, #9b56c7, #6aaee2 22%, #74b6e4 36%, #9b7acd 50%, #d0469f 60%, #d4479f 82%, #b44fb5 92%, #9b56c7); }
+.rg-ghost { opacity: 0; }
+
+.rg-text { position: absolute; left: 140px; top: 0; width: 496px; height: 768px; color: #3a3b3e; font-family: var(--ng); text-align: center; opacity: 0; }
+.rg-text > div { position: absolute; left: 0; right: 0; transform: translateY(-50%); white-space: nowrap; }
+.rg-prov { top: 193px; font-size: 23px; color: #58595d; }
+.rg-name { top: 261px; font-size: 56px; font-weight: 400; color: #38393c; letter-spacing: 1px; }
+.rg-name small { font-size: .45em; margin-left: 4px; }
+.rg-roman { top: 328px; font-size: 44px; font-weight: 300; color: #c6c7ca; }
+.rg-line { top: 381px; left: 20px !important; right: 20px !important; height: 1px; background: #cfd1d5; }
+.rg-kind { top: 434px; font-size: 23px; color: #9a9ca1; letter-spacing: 1px; }
+.rg-kind b { font-weight: 400; color: #4c4d51; }
+.rg-kind i { font-style: normal; color: #9a9ca1; margin: 0 6px; }
+.rg-time { top: 512px; display: flex; align-items: center; justify-content: center; gap: 20px; }
+.rg-ampm { display: flex; flex-direction: column; align-items: center; line-height: 1.08; font-size: 30px; }
+.rg-ampm b { font-weight: 400; color: #55565a; }
+.rg-ampm i { font-style: normal; color: #c3c4c7; }
+.rg-clock { font-size: 86px; font-weight: 400; color: #45464a; letter-spacing: 2px; line-height: 1; }
+
+/* 오른쪽 노선 띠 */
+.srt-strip { position: absolute; left: 0; top: 0; width: 1024px; height: 768px; overflow: visible; opacity: 0; }
+.st-lbl { position: absolute; left: 0; top: 0; white-space: nowrap; font-family: var(--ng); transform-origin: 0 50%; transition: transform .35s cubic-bezier(.3,1.5,.5,1); }
+.st-lbl.txt { font-size: 13px; font-weight: 700; color: #b5809f; transition: transform .35s cubic-bezier(.3,1.5,.5,1), color .3s; }
+.st-lbl.txt.on { color: #d0378f; }
+.st-lbl .pill { height: 27px; font-size: 14px; padding-right: 12px; }
+.st-lbl .pill::before { width: 10px; height: 10px; }
+.st-od { position: absolute; font-family: var(--ng); white-space: nowrap; }
+.st-od .en { position: absolute; right: 0; font-size: 12px; color: #a3a5aa; }
+.st-od .ko { position: absolute; right: 0; font-size: 48px; font-weight: 400; color: #55575c; letter-spacing: 2px; transform-origin: 100% 50%; }
+.st-od .ko.dst { color: #d0378f; }
+
+/* 안내문 */
+#srtNotice { opacity: 0; background: linear-gradient(160deg, #c3127f 0%, #8f2a9c 45%, #4a2aa0 100%); }
+.nt-box { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: #fff; font-family: var(--ng); }
+.nt-title { font-size: 54px; font-weight: 800; margin-bottom: 34px; text-shadow: 0 2px 6px rgba(0,0,0,.25); }
+.nt-title::after { content: ''; display: block; width: 120px; height: 4px; background: #ffe25a; margin: 18px auto 0; border-radius: 2px; }
+.nt-line { font-size: 36px; font-weight: 700; line-height: 1.55; min-height: 20px; text-shadow: 0 1px 4px rgba(0,0,0,.25); }
+.nt-logo { position: absolute; left: 50%; bottom: 26px; width: 120px; height: 40px; margin-left: -60px; font-size: 26px; filter: brightness(0) invert(1); }
