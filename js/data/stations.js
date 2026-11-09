@@ -9,7 +9,7 @@ export const STATIONS = {
   '영등포':     { en: 'Yeongdeungpo',     hanja: '永登浦', lat: 37.5159, lon: 126.9074 },
   '행신':       { en: 'Haengsin',         hanja: '幸信', lat: 37.6121, lon: 126.8336 },
   '광명':       { en: 'Gwangmyeong',      hanja: '光明', lat: 37.4163, lon: 126.8848 },
-  '수서':       { en: 'Suseo',            hanja: '水西', lat: 37.4873, lon: 127.1018 },
+  '수서':       { en: 'Suseo',            hanja: '水西', lat: 37.4873, lon: 127.1018, province: '서울특별시' },
   '동탄':       { en: 'Dongtan',          hanja: '東灘', lat: 37.2001, lon: 127.0957 },
   '평택지제':   { en: 'Pyeongtaekjije',   hanja: '平澤芝制', lat: 36.9937, lon: 127.0886 },
   '천안':       { en: 'Cheonan',          hanja: '天安', lat: 36.8104, lon: 127.1464 },
