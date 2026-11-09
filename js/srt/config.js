@@ -19,7 +19,7 @@ export default {
   //  province    → 링 위쪽 도 이름 (영상 표기 그대로: 수서도 '경기도')
   //  en          → 영문 표기 (영상 표기 그대로: 평택지제 'PyeontaekJije')
   route: {
-    origin: { name: '수서', depart: '19:25', province: '경기도' },
+    origin: { name: '수서', depart: '19:25', province: '서울특별시' },
     stops: [
       { name: '동탄',     arrive: '19:41', province: '경기도' },
       { name: '평택지제', arrive: '19:51', province: '경기도', en: 'PyeontaekJije' },
