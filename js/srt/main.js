@@ -15,7 +15,7 @@ const $ = (s) => document.querySelector(s);
 const stage = $('#stage');
 const BOX = [1024, 768];                       // 실제 SRT 화면 비율 4:3
 // 예전 config(시간·색 항목이 없는 버전)를 그대로 써도 동작하도록 기본값을 채움
-cfg.timing = { logo: 2700, tunnel: 2700, side: 1750, wipe: 1400, map: 11000, flag: 11500, stop: 8000, arrivalFlag: 11000, notice: 7000, ...cfg.timing };
+cfg.timing = { logo: 2700, tunnel: 2700, side: 2200, wipe: 1400, map: 11000, flag: 11500, stop: 8000, arrivalFlag: 11000, notice: 7000, ...cfg.timing };
 cfg.assets = { biColor: '#4B2F48', ...cfg.assets };
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
 
@@ -107,21 +107,21 @@ const segT = (t, a, b) => clamp01((t - a) / (b - a));
 const pts = (P) => P.map((q) => q.map((v) => v.toFixed(1)).join(',')).join(' ');
 const poly = (P, fill, op = 1) => `<polygon fill="${fill}" opacity="${op.toFixed(3)}" points="${pts(P)}"/>`;
 
-// 꼬리(s) → 끝(e) 띠 화살표. 띠 굵기 w0(꼬리)→w1(끝), 끝에는 한쪽(위쪽)으로만 난 미늘
-function barbArrow(s, e, w0, w1, color, op = 1, head = [22, 11]) {
+// 꼬리(s) → 끝(e) 색 띠. 띠 굵기 w0(꼬리)→w1(끝).
+//   g: 미늘(뾰족하게 튀어나온 부분) 방향. +1 화면 위쪽 / -1 아래쪽 / 0 없음(끝이 반듯하게 잘린 띠)
+//   영상: 띠 4개 한 묶음에서 미늘은 맨 바깥 두 띠에만 있음 (바깥쪽으로, 뒤로 젖혀진 'ㄱ' 모양)
+function barbArrow(s, e, w0, w1, color, op = 1, g = 0, bl = 40, phi = 32) {
   const dx = e[0] - s[0], dy = e[1] - s[1], L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L;
   let nx = -uy, ny = ux; if (ny > 0) { nx = -nx; ny = -ny; }          // n: 화면 위쪽
-  const [hl, hw] = head, hb = Math.min(hl, L * .5);
-  const bx = e[0] - ux * hb, by = e[1] - uy * hb;
-  const P = [
-    [s[0] + nx * w0 / 2, s[1] + ny * w0 / 2],
-    [bx + nx * w1 / 2, by + ny * w1 / 2],
-    [bx + nx * (w1 / 2 + hw) - ux * hb * .35, by + ny * (w1 / 2 + hw) - uy * hb * .35],   // 미늘 (뒤로 살짝 젖힘)
-    [e[0], e[1]],
-    [bx - nx * w1 / 2, by - ny * w1 / 2],
-    [s[0] - nx * w0 / 2, s[1] - ny * w0 / 2],
-  ];
-  return poly(P, color, op);
+  const h = w1 / 2, P = [[s[0] + nx * w0 / 2, s[1] + ny * w0 / 2], [e[0] + nx * h, e[1] + ny * h], [e[0] - nx * h, e[1] - ny * h], [s[0] - nx * w0 / 2, s[1] - ny * w0 / 2]];
+  if (!g) return poly(P, color, op);
+  // 미늘 쪽 모서리를 앞으로 내밀어 뾰족하게 하고, 거기서 뒤·바깥으로 젖힌 띠를 붙임
+  const len = Math.min(bl, L * .6), c = Math.cos(phi * D2R), sn = Math.sin(phi * D2R);
+  const A = [e[0] + g * nx * h + ux * w1 * .9, e[1] + g * ny * h + uy * w1 * .9];
+  const B = [A[0] + (-ux * c + g * nx * sn) * len, A[1] + (-uy * c + g * ny * sn) * len];
+  const bt = w1 * 1.15;
+  P.splice(g > 0 ? 1 : 2, 1, A);
+  return poly(P, color, op) + poly([A, B, [B[0] - ux * bt, B[1] - uy * bt], [A[0] - ux * bt, A[1] - uy * bt]], color, op);
 }
 
 // 쐐기 (중심 A에서 각도 th 방향으로 r0~r1, 각 폭 w)
@@ -134,30 +134,36 @@ function wedge(A, th, w, r0, r1, color, op) {
 // 첫 애니메이션 쐐기 목록 (영상 기준 각도: 왼쪽은 왼쪽 위 25° ~ 왼쪽 아래 35°, 오른쪽은 오른쪽 위 20° ~ 오른쪽 아래 32°)
 //  [쪽(-1 왼쪽 / 1 오른쪽), 수평에서 위로 몇 도, 폭(도), 색, 짧아진 뒤 길이, 줄어드는 시작 시각]
 const WEDGES = [
-  [-1, 25, 9, BLUEC, 70, 1.36], [-1, 17, 3, PINKC, 120, 1.48], [-1, 13, 2.2, PALEC, 50, 1.40], [-1, 9, 3.5, PINKC, 150, 1.55],
-  [-1, 5, 2, BLUEC, 90, 1.44], [-1, 1.5, 3, PINKC, 140, 1.52], [-1, -3, 2.5, PALEC, 60, 1.38], [-1, -8, 4, PINKC, 110, 1.58],
-  [-1, -13, 3, BLUEC, 80, 1.46], [-1, -21, 6, PINKC, 130, 1.42], [-1, -31, 7, BLUEC, 60, 1.50],
-  [1, 19, 3, PALEC, 60, 1.40], [1, 13, 2.2, BLUEC, 150, 1.56], [1, 9, 3, PALEC, 90, 1.44], [1, 5, 3.5, PINKC, 170, 1.50],
-  [1, 1, 2, BLUEC, 120, 1.38], [1, -3, 4, PINKC, 160, 1.54], [1, -8, 3, PINKC, 100, 1.46], [1, -13, 2.5, PALEC, 70, 1.42],
-  [1, -18, 5, PINKC, 140, 1.58], [1, -25, 4, BLUEC, 90, 1.48], [1, -32, 6, PINKC, 120, 1.52],
+  [-1, 25, 9, BLUEC, 70, 1.24], [-1, 17, 3, PINKC, 120, 1.36], [-1, 13, 2.2, PALEC, 50, 1.28], [-1, 9, 3.5, PINKC, 150, 1.43],
+  [-1, 5, 2, BLUEC, 90, 1.32], [-1, 1.5, 3, PINKC, 140, 1.40], [-1, -3, 2.5, PALEC, 60, 1.26], [-1, -8, 4, PINKC, 110, 1.46],
+  [-1, -13, 3, BLUEC, 80, 1.34], [-1, -21, 6, PINKC, 130, 1.30], [-1, -31, 7, BLUEC, 60, 1.38],
+  [1, 19, 3, PALEC, 60, 1.28], [1, 13, 2.2, BLUEC, 150, 1.44], [1, 9, 3, PALEC, 90, 1.32], [1, 5, 3.5, PINKC, 170, 1.38],
+  [1, 1, 2, BLUEC, 120, 1.26], [1, -3, 4, PINKC, 160, 1.42], [1, -8, 3, PINKC, 100, 1.34], [1, -13, 2.5, PALEC, 70, 1.30],
+  [1, -18, 5, PINKC, 140, 1.46], [1, -25, 4, BLUEC, 90, 1.36], [1, -32, 6, PINKC, 120, 1.40],
 ];
 const D2R = Math.PI / 180;
 
-// 처음 화살표 묶음: 왼쪽 위 / 오른쪽 아래에서 가운데(A)로 날아옴 (k: 0→1)
-function bundleSVG(A, k, op) {
+// 처음 화살표 묶음 (영상): 왼쪽 위 / 오른쪽 아래 모서리에서 날아와 0.3초에 가운데(A) 앞에서 멈춤
+//   띠 4개는 끝에서 모이고 꼬리로 갈수록 굵게 벌어지는 부채꼴. 0.35~0.85초: 수평 쪽으로 누우며 더 벌어지고 끝이 가까워짐
+const lerpN = (a, b, k) => a + (b - a) * k;
+function bundleSVG(A, t, op) {
   const cols = [PINKC, BLUEC, PINKC, BLUEC];
+  const k = easeInOut(segT(t, .35, .85)), fly = Math.pow(1 - segT(t, .1, .32), 2) * 1000;
   let html = '';
   for (const side of [-1, 1]) {
-    const base = side < 0 ? Math.atan2(.47, 1) : Math.atan2(.55, 1) + Math.PI;     // 날아가는 방향
-    const e = easeOut(k);
+    const base = (side < 0 ? Math.PI : 0) + lerpN(side < 0 ? 27 : 26, 9, k) * D2R;      // A에서 꼬리 쪽 방향 (왼쪽 위 / 오른쪽 아래)
+    const e = lerpN(50, 12, k), delta = lerpN(3.7, 8.5, k) * D2R;                      // 부채꼴 꼭짓점은 A 너머 e, 띠 사이 각
+    // 날아오는 동안은 묶음 전체가 제 방향으로 밀려 있음
+    const apex = [A[0] - Math.cos(base) * (e - fly), A[1] - Math.sin(base) * (e - fly)];
+    const rTip = e + lerpN(62, 20, k);
     cols.forEach((c, i) => {
-      const off = (i - 1.5) * 15 * side;
-      const a = base - (i - 1.5) * 2.4 * D2R * side;                                 // 꼬리 쪽으로 살짝 벌어짐
-      const ux = Math.cos(a), uy = Math.sin(a), nx = -Math.sin(base), ny = Math.cos(base);
-      const gap = 24 + i * 6, travel = (1 - e) * 820;
-      const tip = [A[0] - ux * (gap + travel) + nx * off, A[1] - uy * (gap + travel) + ny * off];
-      const tail = [tip[0] - ux * 1100, tip[1] - uy * 1100];
-      html += barbArrow(tail, tip, 8, 8, c, op * .95, [20, 10]);
+      // 왼쪽 묶음은 위에서부터, 오른쪽 묶음은 아래에서부터 분홍·하늘·분홍·하늘
+      const th = base + (1.5 - i) * delta, u = [Math.cos(th), Math.sin(th)];
+      const tip = [apex[0] + u[0] * rTip, apex[1] + u[1] * rTip], tail = [apex[0] + u[0] * (rTip + 1700), apex[1] + u[1] * (rTip + 1700)];
+      const w1 = Math.max(5, rTip * delta * .7), w0 = (rTip + 1700) * delta * .7;
+      // 미늘은 맨 바깥 두 띠에만 (분홍은 크게, 하늘색은 작게), 바깥쪽으로
+      const g = i === 0 ? -side : i === 3 ? side : 0;
+      html += barbArrow(tail, tip, w0, w1, c, op * .95, g, i === 0 ? 30 : 15, 40);
     });
   }
   return html;
@@ -168,30 +174,30 @@ function introFrame(t) {
   const gl = $('#gl');
   let A = scene.approach(t);                      // 열차 앞머리 화면 위치
   A = [A.x, A.y];
-  gl.style.opacity = String(easeOut(segT(t, .58, .92)));
-  stage.style.background = '#f2f2f3';
+  gl.style.opacity = String(easeOut(segT(t, .85, 1.05)));
+  stage.style.background = (cfg.sky || 'blue') !== 'white' ? '#eef8fd' : '#f2f2f3';
   const R = 1500;
   let html = '';
-  // 화살표 묶음 (0 ~ 0.55초 날아옴, 0.6 ~ 0.8초 사라짐)
-  const bop = 1 - segT(t, .6, .8);
-  if (bop > 0) html += bundleSVG(A, segT(t, 0, .55), bop);
-  // 쐐기: 0.55초부터 묶음 방향에서 펼쳐짐 → 1.36~1.8초 바깥 끝부터 계단처럼 짧아짐 → 1.8~2.45초 열차를 따라 가늘어지며 사라짐
-  if (t > .55) {
+  // 화살표 묶음 (0 ~ 0.3초 날아옴 → 0.85초까지 벌어짐 → 0.88 ~ 1.0초 쐐기로 바뀌며 사라짐)
+  const bop = 1 - segT(t, .88, 1.0);
+  if (bop > 0) html += bundleSVG(A, t, bop);
+  // 쐐기: 0.85초부터 묶음 방향에서 펼쳐짐 → 1.36~1.8초 바깥 끝부터 계단처럼 짧아짐 → 1.8~2.45초 열차를 따라 가늘어지며 사라짐
+  if (t > .85) {
     WEDGES.forEach(([side, up, w, col, short, t0], i) => {
-      const open = easeOut(segT(t, .55 + (i % 5) * .025, .9 + (i % 4) * .02));
-      const bundleA = side < 0 ? Math.PI + Math.atan2(.47, 1) : Math.atan2(.55, 1);   // 묶음이 놓인 방향
+      const open = easeOut(segT(t, .85 + (i % 5) * .012, 1.0 + (i % 4) * .02));
+      const bundleA = (side < 0 ? Math.PI : 0) + 9 * D2R;                             // 묶음이 놓인 방향 (벌어진 뒤)
       const target = side < 0 ? Math.PI + up * D2R : -up * D2R;
       // 묶음 방향 → 제 각도로 돌아가며 펼쳐짐
       const ba = side < 0 ? bundleA - Math.PI * 2 * 0 : bundleA;
       let dA = target - ba; while (dA > Math.PI) dA -= Math.PI * 2; while (dA < -Math.PI) dA += Math.PI * 2;
       const th = ba + dA * open;
-      const shrink = easeInOut(segT(t, t0, t0 + .3));
-      const fadeTail = segT(t, 1.8, 2.2);
-      const zoom = 1 + 1.6 * segT(t, 1.6, 2.4);                 // 열차가 다가오면 띠도 같이 커짐
+      const shrink = easeInOut(segT(t, t0, t0 + .26));
+      const fadeTail = segT(t, 1.7, 2.25);                      // 남은 짧은 띠가 점점 더 짧아짐
+      const zoom = 1 + .5 * segT(t, 1.6, 2.4);                 // 열차가 다가오면 띠도 같이 커짐
       const r0 = (4 + 16 * shrink) * zoom * (1 + 1.5 * fadeTail);
-      const r1 = (R * open * (1 - shrink) + (short * (1 - .55 * fadeTail)) * shrink) * zoom;
+      const r1 = (R * open * (1 - shrink) + (short * (side < 0 ? 1.5 : 2.3) * (1 - .8 * fadeTail)) * shrink) * zoom;
       const ww = w * D2R * (1 + .9 * shrink) * (1 - .5 * fadeTail);       // 짧아진 띠는 굵게 보임 (영상)
-      const op = .92 * (1 - fadeTail) * Math.min(1, open * 3);
+      const op = .92 * (1 - segT(t, 2.05, 2.25)) * Math.min(1, open * 3);
       html += wedge(A, th, ww, r0, Math.max(r0, r1), col, op);
     });
   }
@@ -209,11 +215,12 @@ function drawMapRibbons(k, op = 1) {
   let html = '';
   MAP_ARROWS.forEach(([c, y], i) => {
     const s = [-60, by + y + 22];                                         // 꼬리 (화면 왼쪽 밖, 고정)
-    const dx = C[0] - s[0], dy = C[1] - s[1], L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L;
-    // 끝: 띠마다 조금씩 어긋나게 (위쪽 분홍 띠가 가장 멀리, 미늘이 보이게)
-    const end = [C[0] - ux * i * 16 - uy * (i - 1.5) * 8, C[1] - uy * i * 16 + ux * (i - 1.5) * 8];
+    // 끝: 띠 4개가 해안에서 나란히 잘림 (맨 위 분홍 띠만 조금 짧음)
+    const end = [C[0] - (i === 0 ? 16 : 0), C[1] + (i - 1.5) * 15];
     const tip = [s[0] + (end[0] - s[0]) * e, s[1] + (end[1] - s[1]) * e];
-    if (e > .002) html += barbArrow(s, tip, 46, 16 + 22 * (1 - e), c, .95 * op, [34, 15]);
+    // 미늘은 2개뿐: 맨 위 분홍(위쪽으로), 맨 아래 하늘색(아래쪽으로)
+    const g = i === 0 ? 1 : i === 3 ? -1 : 0;
+    if (e > .002) html += barbArrow(s, tip, 46, 13 + 22 * (1 - e), c, .95 * op, g, 52, 34);
   });
   $('#ribbons').innerHTML = html;
 }
@@ -464,6 +471,7 @@ async function freezeAt(name, sec) {
 }
 
 async function main() {
+  document.body.classList.toggle('sky-blue', (cfg.sky || 'blue') !== 'white');
   await Promise.all(['300 20px "NanumBarunLocal"', '400 20px "NanumBarunLocal"', '700 20px "NanumBarunLocal"', '400 20px "NanumBarunGothic"', '700 20px "NanumBarunGothic"']
     .map((f) => document.fonts.load(f, '역도착').catch(() => {})));
   scene = new SrtScene($('#gl'), cfg, route);

@@ -46,6 +46,9 @@ body.srt #clock.srt-clock.on-dark { color: #fff; }
 #clouds { opacity: 0; overflow: hidden; }
 #clouds::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 34%; background: linear-gradient(180deg, rgba(196,203,212,.75), rgba(226,230,236,.45) 45%, rgba(244,245,247,0)); }
 #clouds i { position: absolute; top: -30px; height: 120px; border-radius: 50%; background: radial-gradient(closest-side, rgba(255,255,255,.95), rgba(255,255,255,.75) 60%, rgba(255,255,255,0)); animation: srtcloud 80s linear infinite alternate; }
+/* 파란 하늘 (config.js sky: 'blue') */
+.sky-blue #clouds::before { height: 40%; background: linear-gradient(180deg, rgba(58,152,228,.96), rgba(112,188,240,.8) 40%, rgba(190,228,248,.35) 75%, rgba(230,245,252,0)); }
+.sky-blue #clouds i { background: radial-gradient(closest-side, rgba(255,255,255,.98), rgba(255,255,255,.82) 55%, rgba(255,255,255,0)); }
 #clouds i:nth-child(1) { left: -6%; width: 30%; top: -8px; }
 #clouds i:nth-child(2) { left: 16%; width: 24%; top: 34px; height: 70px; opacity: .85; animation-duration: 95s; }
 #clouds i:nth-child(3) { left: 36%; width: 32%; top: -28px; }

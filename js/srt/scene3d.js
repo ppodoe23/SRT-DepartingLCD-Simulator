@@ -71,19 +71,21 @@ export class SrtScene {
 
     // ── 선로 장면 (정면 · 측면) ───────────────────────
     const T = this.track = new THREE.Scene();
-    T.background = gradientTexture([[0, '#eceef1'], [.5, '#f5f6f8'], [1, '#f7f7f8']]);
-    T.fog = new THREE.Fog(0xf5f6f8, 90, 520);
+    // 하늘: 'blue' 위는 파랗고 지평선 쪽은 옅은 하늘빛 (2021-06-09 영상) / 'white' 흰 바탕 (2023-09-16 영상)
+    const blue = (this.cfg.sky || 'blue') !== 'white';
+    T.background = gradientTexture(blue ? [[0, '#3f9fe6'], [.22, '#7cc3f0'], [.42, '#d3eefb'], [.5, '#eaf7fd'], [1, '#f1fafe']] : [[0, '#eceef1'], [.5, '#f5f6f8'], [1, '#f7f7f8']]);
+    T.fog = new THREE.Fog(blue ? 0xe6f5fc : 0xf5f6f8, 90, 520);
     T.environment = env; T.environmentIntensity = .8;
     T.add(new THREE.HemisphereLight(0xffffff, 0xdfe2e7, 1.7));
     const sun = new THREE.DirectionalLight(0xffffff, 1.3); sun.position.set(20, 40, 30); T.add(sun);
-    const tg = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), new THREE.MeshBasicMaterial({ color: 0xf4f5f7 }));
+    const tg = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), new THREE.MeshBasicMaterial({ color: blue ? 0xeef9fe : 0xf4f5f7 }));
     tg.rotation.x = -Math.PI / 2; T.add(tg);
-    // 만화풍 검은 선로: 검은 바탕 + 흰 틈 + 양옆으로 삐죽 나온 침목
+    // 만화풍 검은 선로 (영상: 열차 폭의 두 배쯤 되는 넓은 선로): 검은 바탕 + 가는 흰 틈 + 양옆으로 삐죽 나온 침목
     const black = new THREE.MeshBasicMaterial({ color: 0x17181b });
-    const bed = new THREE.Mesh(new THREE.BoxGeometry(3.6, .2, 1600), black); bed.position.set(0, .1, -400); T.add(bed);
+    const bed = new THREE.Mesh(new THREE.BoxGeometry(5.6, .2, 1600), black); bed.position.set(0, .1, -400); T.add(bed);
     const N = 1500;
-    const gaps = new THREE.InstancedMesh(new THREE.BoxGeometry(2.3, .05, .42), new THREE.MeshBasicMaterial({ color: 0xf2f3f5 }), N);
-    const ties = new THREE.InstancedMesh(new THREE.BoxGeometry(4.1, .2, .42), black, N);
+    const gaps = new THREE.InstancedMesh(new THREE.BoxGeometry(3.7, .05, .34), new THREE.MeshBasicMaterial({ color: 0xf2f3f5 }), N);
+    const ties = new THREE.InstancedMesh(new THREE.BoxGeometry(6.6, .2, .46), black, N);
     const m4 = new THREE.Matrix4();
     for (let i = 0; i < N; i++) {
       const z = 400 - i * 1.05;
@@ -141,6 +143,19 @@ export class SrtScene {
     this.trainFront = tb.max.x; this.trainLen = tb.max.x - tb.min.x;
     train.rotation.y = -Math.PI / 2;            // 앞(+X) → +Z (카메라 쪽)
     this.train = train; T.add(train);
+    // 열차 사라짐 효과 (영상): 앞머리가 화면 오른쪽 끝을 지날 때 가는 세로 줄무늬로 비쳐 보이며 사라지고,
+    //   끝날 때는 꼬리 쪽부터 창문이 점선처럼 끊기며 사라짐. (세계 좌표 z 기준, 줄무늬는 잘라내기로 그림)
+    const fx = this.trainFx = { uNose: { value: new THREE.Vector2(1e5, 1e6) }, uTail: { value: -1e6 } };
+    const patch = (sh) => {
+      sh.uniforms.uNose = fx.uNose; sh.uniforms.uTail = fx.uTail;
+      sh.vertexShader = 'varying float vWz;\n' + sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n  vWz = (modelMatrix * vec4(transformed, 1.0)).z;');
+      sh.fragmentShader = 'varying float vWz;\nuniform vec2 uNose;\nuniform float uTail;\n' + sh.fragmentShader.replace('#include <clipping_planes_fragment>',
+        '#include <clipping_planes_fragment>\n  float fxN = smoothstep(uNose.x, uNose.y, vWz);\n  if (fxN > 0.0 && fract(vWz * 22.0) < fxN * 1.02) discard;\n  float fxT = smoothstep(uTail, uTail - 16.0, vWz);\n  if (fxT > 0.0 && fract(vWz * 1.7) < fxT * 1.02) discard;');
+    };
+    train.traverse((m) => {
+      if (!m.material) return;
+      for (const mt of Array.isArray(m.material) ? m.material : [m.material]) { mt.onBeforeCompile = patch; mt.needsUpdate = true; }
+    });
 
     // ── 지도 장면 ─────────────────────────────────
     const M = this.map = new THREE.Scene();
@@ -243,23 +258,73 @@ export class SrtScene {
 
   // 측면: 열차 옆에 바짝 붙어 따라감. 분홍 띠 두 줄이 지붕 위를, 하늘색 띠가 창문 줄을 따라 열차를 감싸고 흐름
   //   → 열차가 빠져나가면 띠가 뒤에서부터 줄어들며 바람처럼 사라짐
-  side(t, T) {
-    // 영상: 카메라는 열차 왼쪽에서 조금 떨어져 앞쪽(소실점이 화면 왼쪽 밖)을 비스듬히 봄
-    //   열차는 오른쪽으로 지나가고(1.4초쯤 꼬리 통과), 분홍 띠 두 줄은 지붕 위, 하늘색 띠는 창문 줄을 따라 흐름
-    //   꼬리가 지나간 뒤 띠는 선로 높이로 내려앉으며 남음 → 줄무늬 전환
-    const cam = this.camera;
-    for (const s of this.streaks) s.visible = false;
-    const front = 6 + 145 * t;
-    this.placeTrainZ(front);
-    // 끝 0.5초: 카메라가 선로 정면(옆)으로 돌아서 선로와 띠가 가로로 눕게 됨 (영상: 줄무늬 전환 직전)
-    const turn = easeInOut(seg(t, T - .5, T)), zc = 2 + 1.5 * t;
-    cam.position.set(-13, lerp(4.3, 3.2, turn), zc);
-    cam.lookAt(0, lerp(2.0, 1.4, turn), lerp(-14 + 1.5 * t, zc, turn));
+  // ── 열차 장면 카메라 (2021-06-09 정면 촬영 영상을 프레임 단위로 잰 값) ─────────
+  //  시각(화살표 묶음이 나타난 뒤 초), 선로에서 왼쪽으로 떨어진 거리, 높이, 오른쪽으로 돌린 각도(°: 0 = 선로 정면)
+  //  0.9초 선로 위 정면 → 1.25초 낮게 내려앉으며 왼쪽으로 → 1.7초부터 다가오는 열차를 따라 오른쪽으로 돌며 물러남
+  //  → 2.7초 앞머리가 화면 오른쪽 끝 → 3.05초부터 옆모습(소실점은 화면 왼쪽 밖)
+  static CAM = [[0, .3, 4.5, 2], [.9, .3, 4.5, 2], [1.2, 3.3, 3, 7.5], [1.7, 4.2, 3, 10.5], [2.3, 7, 3, 9.5], [2.5, 7.5, 3, 21], [2.7, 8, 3, 25], [2.8, 8, 3, 28], [3.2, 9.2, 2.8, 35.5], [99, 9.2, 2.8, 35.5]];
+  //  열차 앞머리 위치(z): 1.7초까지 멀리서 천천히 → 2.3초부터 빠르게 다가와 2.8초에 화면 오른쪽 끝을 지남
+  static FRONT = [[0, -50], [1.0, -42], [1.7, -36], [2.0, -35], [2.3, -33], [2.5, -11.5], [2.7, -8.8], [2.8, -5.9]];
+
+  // 표(K)에서 시각 t의 값 (부드럽게 이음). mEnd: 마지막 점에서의 빠르기
+  keyAt(K, t, mEnd = 0) {
+    let i = 0; while (i < K.length - 2 && t > K[i + 1][0]) i++;
+    const a = K[i], b = K[i + 1], p = K[Math.max(0, i - 1)], n = K[Math.min(K.length - 1, i + 2)];
+    const dt = b[0] - a[0], u = Math.min(1, Math.max(0, (t - a[0]) / dt)), u2 = u * u, u3 = u2 * u;
+    const out = [];
+    for (let k = 1; k < a.length; k++) {
+      const m0 = i === 0 ? 0 : (b[k] - p[k]) / (b[0] - p[0]), m1 = i + 2 > K.length - 1 ? mEnd : (n[k] - a[k]) / (n[0] - a[0]);
+      out.push((2 * u3 - 3 * u2 + 1) * a[k] + (u3 - 2 * u2 + u) * dt * m0 + (-2 * u3 + 3 * u2) * b[k] + (u3 - u2) * dt * m1);
+    }
+    return out;
+  }
+
+  camKey(t) { return this.keyAt(this.constructor.CAM, t); }     // [X, h, yaw°]
+
+  setTrainCam(X, h, yawDeg) {
+    const cam = this.camera, y = (yawDeg * Math.PI) / 180, p = (1.25 * Math.PI) / 180;   // 지평선이 화면 높이 47%쯤
+    cam.position.set(-X, h, 0);
+    cam.lookAt(-X + Math.sin(y) * Math.cos(p) * 50, h - Math.sin(p) * 50, -Math.cos(y) * Math.cos(p) * 50);
     cam.updateMatrixWorld();
+  }
+
+  setTrainOpacity(o) {
+    if (this._trainOp === o) return;
+    this._trainOp = o;
+    this.train.visible = o > .01;
+    this.train.traverse((m) => {
+      if (!m.material) return;
+      for (const mt of Array.isArray(m.material) ? m.material : [m.material]) { mt.transparent = o < 1; mt.opacity = o; mt.depthWrite = o >= 1; }
+    });
+  }
+
+  // 측면 통과 속도: 꼬리가 4.25초(측면 장면 1.55초)에 화면 왼쪽 끝에 닿도록 (열차 길이에 맞춤)
+  get passSpeed() { return Math.max(40, ((this.trainLen || 150) - 48) / 1.45); }
+
+  trainFrontAt(t) {
+    const v = this.passSpeed;
+    return t > 2.8 ? -5.9 + v * (t - 2.8) : this.keyAt(this.constructor.FRONT, t, v)[0];
+  }
+
+  // 측면: 카메라는 그대로 서 있고 열차가 오른쪽으로 지나감 (t: 앞머리가 화면 오른쪽 끝을 지난 뒤 초)
+  //   분홍 띠 두 줄은 지붕 위, 하늘색 띠는 창문 줄을 따라 흐름
+  //   끝 0.65초: 꼬리가 사라지고 카메라가 선로 옆으로 돌아 선로와 띠가 가로로 누움 → 줄무늬 전환
+  side(t, T) {
+    for (const s of this.streaks) s.visible = false;
+    const front = this.trainFrontAt(2.7 + t);
+    this.placeTrainZ(front);
+    const t0 = T - .65, turn = easeInOut(seg(t, t0, t0 + .55));
+    const [X, h, yaw] = this.camKey(2.7 + t);
+    this.setTrainCam(lerp(X, 16, turn), lerp(h, 1.75, turn), lerp(yaw, 90, turn));
+    this.setTrainOpacity(1);
+    // 앞머리(첫 칸)가 지나가는 동안만 화면 오른쪽 끝에서 비쳐 보이며 사라짐. 그 뒤 객차는 끝까지 또렷함
+    if (front < 22) this.trainFx.uNose.value.set(-7.5, -4); else this.trainFx.uNose.value.set(1e5, 1e6);
+    // 꼬리 쪽(화면 왼쪽)부터 오른쪽으로 0.3초 동안 점선처럼 끊기며 사라짐
+    this.trainFx.uTail.value = t < t0 - .1 ? -1e6 : lerp(-75, 14, seg(t, t0 - .1, t0 + .2));
     const rear = front - (this.trainLen || 150);
     const roof = 4.0 + (this.cfg.models.train.yOffset || 0);
-    const gone = seg(rear, -20, 30);                         // 꼬리가 화면을 지나감
-    const drop = easeInOut(seg(t, T - .45, T));               // 끝: 선로 쪽으로 내려앉음
+    const gone = seg(rear, -60, -10);                        // 꼬리가 화면을 지나감
+    const drop = easeInOut(seg(t, t0, t0 + .5));              // 끝: 선로 쪽으로 내려앉음
     const R = [
       { x: -1.2, y: roof + .4, w: .13, on: 0 },
       { x: -1.2, y: roof + .95, w: .17, on: .05 },
@@ -272,35 +337,26 @@ export class SrtScene {
       r.material.opacity = .95 * show * (1 - seg(t, T - .15, T));
       const y = lerp(c.y, .35 + i * .22, Math.max(gone * .6, drop));
       const pos = r.geometry.attributes.position;
-      const zN = 60, zF = -420;
+      const zN = 260, zF = -420;
       for (let j = 0; j < pos.count; j++) {
         const u = (j % 201) / 200, row = Math.floor(j / 201);
         pos.setXYZ(j, c.x, y + (row ? c.w : 0), zN + (zF - zN) * u);
       }
       pos.needsUpdate = true;
     });
-    this.renderer.render(this.track, cam);
+    this.renderer.render(this.track, this.camera);
   }
 
-  // ── 첫 애니메이션 (영상 기준, t = 화살표 묶음이 나타난 뒤 초) ─────────
-  //  0.6초: 소실점에 작은 열차 → 1.5초까지 거의 제자리 → 그 뒤 빠르게 다가옴
-  //  카메라: 1.45초까지 선로 위 정면 → 2.3초까지 왼쪽 위로 비켜서 열차를 앞쪽 3/4 각도로 봄
-  trainFrontAt(t) {
-    return t < 1.5 ? -165 + 55 * easeInOut(seg(t, .6, 1.5)) : -110 + 130 * (t - 1.5);
-  }
-
+  // 첫 애니메이션 (t: 화살표 묶음이 나타난 뒤 초). 돌려주는 값: 열차 앞머리의 화면 위치 (2D 띠의 중심)
   approach(t) {
-    const cam = this.camera;
     for (const s of this.streaks) s.visible = false;
     this.sideRibbons.forEach((r) => (r.visible = false));
+    this.setTrainOpacity(1);
+    this.trainFx.uNose.value.set(-7.5, -4); this.trainFx.uTail.value = -1e6;
     const front = this.trainFrontAt(t);
     this.placeTrainZ(front);
-    const a = easeInOut(seg(t, 1.45, 2.3)), b = easeOut(seg(t, 2.3, 2.75));
-    const pos = V(-1, 3.0, 14).lerp(V(-6.5, 3.6, 8), a).lerp(V(-7.5, 3.1, 6), b);
-    const look = V(-.6, 2.4, -100).lerp(V(1.5, 2.0, -30), a).lerp(V(2.5, 2.0, -10), b);
-    cam.position.copy(pos); cam.lookAt(look); cam.updateMatrixWorld();
-    this.renderer.render(this.track, cam);
-    // 열차 앞머리 화면 위치 (2D 띠의 중심)
+    this.setTrainCam(...this.camKey(t));
+    this.renderer.render(this.track, this.camera);
     return this.toScreen(V(0, 2.0 + (this.cfg.models.train.yOffset || 0), front));
   }
 
