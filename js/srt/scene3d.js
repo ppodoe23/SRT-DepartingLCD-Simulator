@@ -143,14 +143,28 @@ export class SrtScene {
     this.trainFront = tb.max.x; this.trainLen = tb.max.x - tb.min.x;
     train.rotation.y = -Math.PI / 2;            // 앞(+X) → +Z (카메라 쪽)
     this.train = train; T.add(train);
-    // 열차 사라짐 효과 (영상): 앞머리가 화면 오른쪽 끝을 지날 때 가는 세로 줄무늬로 비쳐 보이며 사라지고,
-    //   끝날 때는 꼬리 쪽부터 창문이 점선처럼 끊기며 사라짐. (세계 좌표 z 기준, 줄무늬는 잘라내기로 그림)
-    const fx = this.trainFx = { uNose: { value: new THREE.Vector2(1e5, 1e6) }, uTail: { value: -1e6 } };
+    // 열차 사라짐 효과 (영상, 잘라내기로 그림. 세계 좌표 기준):
+    //  ① 앞머리가 화면 오른쪽 끝을 지날 때 가는 세로 줄무늬로 비쳐 보이며 사라짐 (uNose)
+    //  ② 반쯤 지나간 뒤부터 열차 전체가 점점 비쳐 보임 — 달리는 방향으로 흐르는 가는 줄무늬 (uGhost: 비치는 정도, 흐름)
+    //  ③ 먼 쪽(화면 왼쪽)부터 가까운 쪽으로: 창문·차체가 위아래로 눌려 지붕 줄 · 창문 줄 · 아랫단 줄 세 가닥 띠로 풀리고,
+    //     띠는 더 가늘어지다 사라짐 (uTail: 풀리기 시작하는 z 위치)
+    const fx = this.trainFx = { uNose: { value: new THREE.Vector2(1e5, 1e6) }, uTail: { value: -1e6 }, uGhost: { value: new THREE.Vector2(0, 0) }, uY0: { value: this.cfg.models.train.yOffset || 0 } };
     const patch = (sh) => {
-      sh.uniforms.uNose = fx.uNose; sh.uniforms.uTail = fx.uTail;
-      sh.vertexShader = 'varying float vWz;\n' + sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n  vWz = (modelMatrix * vec4(transformed, 1.0)).z;');
-      sh.fragmentShader = 'varying float vWz;\nuniform vec2 uNose;\nuniform float uTail;\n' + sh.fragmentShader.replace('#include <clipping_planes_fragment>',
-        '#include <clipping_planes_fragment>\n  float fxN = smoothstep(uNose.x, uNose.y, vWz);\n  if (fxN > 0.0 && fract(vWz * 22.0) < fxN * 1.02) discard;\n  float fxT = smoothstep(uTail, uTail - 16.0, vWz);\n  if (fxT > 0.0 && fract(vWz * 1.7) < fxT * 1.02) discard;');
+      Object.assign(sh.uniforms, fx);
+      sh.vertexShader = 'varying vec2 vWzy;\n' + sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n  { vec4 wp = modelMatrix * vec4(transformed, 1.0); vWzy = wp.zy; }');
+      sh.fragmentShader = 'varying vec2 vWzy;\nuniform vec2 uNose;\nuniform vec2 uGhost;\nuniform float uTail;\nuniform float uY0;\n' + sh.fragmentShader.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+  float fxN = smoothstep(uNose.x, uNose.y, vWzy.x);
+  if (fxN > 0.0 && fract(vWzy.x * 22.0) < fxN * 1.02) discard;
+  if (uGhost.x > 0.0) {   // 가로로 긴 줄들이 달리는 쪽으로 흐름 → 모션 블러처럼 비쳐 보임
+    float row = floor(gl_FragCoord.y / 2.0), r = fract(sin(row * 12.9898) * 43758.5453);
+    if (fract((gl_FragCoord.x - uGhost.y * (0.6 + r)) / (50.0 + 90.0 * r) + r * 7.0) < uGhost.x) discard;
+  }
+  float fxT = smoothstep(uTail, uTail - 26.0, vWzy.x);
+  if (fxT > 0.0) {
+    float fx2 = smoothstep(uTail - 45.0, uTail - 100.0, vWzy.x);
+    float hw = mix(mix(0.72, 0.08, fxT), 0.0, fx2), y = vWzy.y - uY0;
+    if (min(min(abs(y - 3.72), abs(y - 2.45)), abs(y - 1.1)) > hw) discard;
+  }`);
     };
     train.traverse((m) => {
       if (!m.material) return;
@@ -298,8 +312,8 @@ export class SrtScene {
     });
   }
 
-  // 측면 통과 속도: 꼬리가 4.25초(측면 장면 1.55초)에 화면 왼쪽 끝에 닿도록 (열차 길이에 맞춤)
-  get passSpeed() { return Math.max(40, ((this.trainLen || 150) - 48) / 1.45); }
+  // 측면 통과 속도 (열차 길이에 맞춤): 띠로 풀려 사라질 때까지 열차가 화면에 남아 있도록
+  get passSpeed() { return Math.max(40, ((this.trainLen || 150) - 95) / 1.8); }
 
   trainFrontAt(t) {
     const v = this.passSpeed;
@@ -311,20 +325,22 @@ export class SrtScene {
   //   끝 0.65초: 꼬리가 사라지고 카메라가 선로 옆으로 돌아 선로와 띠가 가로로 누움 → 줄무늬 전환
   side(t, T) {
     for (const s of this.streaks) s.visible = false;
-    const front = this.trainFrontAt(2.7 + t);
+    // 반쯤 지나간 뒤(1.15초)부터 점점 빨라짐
+    const acc = Math.max(0, t - 1.15), front = this.trainFrontAt(2.7 + t) + 70 * acc * acc;
     this.placeTrainZ(front);
-    const t0 = T - .65, turn = easeInOut(seg(t, t0, t0 + .55));
+    const t0 = T - .42, turn = easeInOut(seg(t, t0, t0 + .4));     // 끝: 카메라가 선로 옆으로 돌아 선로가 가로로 누움
     const [X, h, yaw] = this.camKey(2.7 + t);
     this.setTrainCam(lerp(X, 16, turn), lerp(h, 1.75, turn), lerp(yaw, 90, turn));
-    this.setTrainOpacity(1);
-    // 앞머리(첫 칸)가 지나가는 동안만 화면 오른쪽 끝에서 비쳐 보이며 사라짐. 그 뒤 객차는 끝까지 또렷함
+    this.setTrainOpacity(t < 1.9 ? 1 : 0);
+    // 앞머리(첫 칸)가 지나가는 동안만 화면 오른쪽 끝에서 비쳐 보이며 사라짐. 그 뒤 객차는 또렷함
     if (front < 22) this.trainFx.uNose.value.set(-7.5, -4); else this.trainFx.uNose.value.set(1e5, 1e6);
-    // 꼬리 쪽(화면 왼쪽)부터 오른쪽으로 0.3초 동안 점선처럼 끊기며 사라짐
-    this.trainFx.uTail.value = t < t0 - .1 ? -1e6 : lerp(-75, 14, seg(t, t0 - .1, t0 + .2));
+    // 반쯤 지나간 뒤부터 전체가 점점 비쳐 보이고(흐르는 줄무늬), 1.45초부터 먼 쪽 → 가까운 쪽으로 띠로 풀려 흩어짐
+    this.trainFx.uGhost.value.set(.45 * easeInOut(seg(t, 1.15, 1.75)), t * 900);
+    this.trainFx.uTail.value = t < 1.45 ? -1e6 : t < 1.8 ? lerp(-70, 8, easeOut(seg(t, 1.45, 1.7))) : lerp(8, 90, seg(t, 1.8, 1.9));
     const rear = front - (this.trainLen || 150);
     const roof = 4.0 + (this.cfg.models.train.yOffset || 0);
     const gone = seg(rear, -60, -10);                        // 꼬리가 화면을 지나감
-    const drop = easeInOut(seg(t, t0, t0 + .5));              // 끝: 선로 쪽으로 내려앉음
+    const drop = easeInOut(seg(t, t0 - .1, t0 + .35));         // 끝: 선로 쪽으로 내려앉음
     const R = [
       { x: -1.2, y: roof + .4, w: .13, on: 0 },
       { x: -1.2, y: roof + .95, w: .17, on: .05 },
@@ -352,7 +368,7 @@ export class SrtScene {
     for (const s of this.streaks) s.visible = false;
     this.sideRibbons.forEach((r) => (r.visible = false));
     this.setTrainOpacity(1);
-    this.trainFx.uNose.value.set(-7.5, -4); this.trainFx.uTail.value = -1e6;
+    this.trainFx.uNose.value.set(-7.5, -4); this.trainFx.uTail.value = -1e6; this.trainFx.uGhost.value.set(0, 0);
     const front = this.trainFrontAt(t);
     this.placeTrainZ(front);
     this.setTrainCam(...this.camKey(t));

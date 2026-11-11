@@ -304,15 +304,36 @@ function buildMapOverlay() {
 let scene = null, guide = null;
 const flag = new SrtFlag($('#flagLayer'));
 
+// 맨 위 검은 띠(날짜·시각): up = true 면 화면 위로 숨김, false 면 미끄러져 내려와 감속하며 멈춤
+function topBar(up, now = false) {
+  for (const el of [$('#topbar'), $('#clock')]) {
+    el.classList.toggle('bar-now', now); el.classList.toggle('bar-up', up);
+    if (now) { void el.offsetWidth; el.classList.remove('bar-now'); }
+  }
+}
+
 async function playLogo() {
   const ls = $('#logoScreen'), logo = ls.querySelector('.logo');
   setOp(ls, 1); setOp(logo, 0);
-  // 영상: 흰 화면 1.25초 → 로고가 나타나 1초 머묾 → 사라짐 (전체 cfg.timing.logo)
+  // 영상: 흰 화면 1.3초 → 위 검은 띠가 내려옴 → SR 로고가 튀어나오듯 커졌다(1.2배) 살짝 작아지고(0.92배) 제 크기로 (0.5초)
+  //       → 0.7초 머묾 → 사라짐 (전체 cfg.timing.logo)
   const k = cfg.timing.logo / 2700;
-  await sleep(1250 * k);
-  await anim(logo, [{ opacity: 0 }, { opacity: 1 }], { duration: 200 * k });
-  await sleep(1000 * k);
-  await anim(logo, [{ opacity: 1 }, { opacity: 0 }], { duration: 250 * k });
+  topBar(true, true);
+  await sleep(1150 * k);
+  topBar(false);
+  await sleep(150 * k);
+  logo.style.opacity = '1';
+  await anim(logo, [
+    { transform: 'scale(.15)', opacity: 0, offset: 0 },
+    { transform: 'scale(1.2)', opacity: 1, offset: .2, easing: 'ease-out' },
+    { transform: 'scale(1.15)', opacity: 1, offset: .6, easing: 'ease-in' },
+    { transform: 'scale(.92)', opacity: 1, offset: .8, easing: 'ease-out' },
+    { transform: 'scale(1)', opacity: 1, offset: 1 },
+  ], { duration: 500 * k });
+  await sleep(700 * k);
+  await anim(logo, [{ opacity: 1 }, { opacity: 0 }], { duration: 130 * k });
+  logo.style.opacity = '0';
+  await sleep(70 * k);
 }
 
 async function playTrain() {
@@ -470,8 +491,61 @@ async function freezeAt(name, sec) {
   document.body.dataset.frozen = '1';
 }
 
+// 뭉게구름 (영상): 부드러운 솜뭉치 여러 개가 겹친 구름. 윗면은 희고 밑은 반듯하며 하늘빛 그늘이 짐
+//   위쪽(가까운) 구름은 크고 또렷, 지평선 쪽으로 갈수록 작고 흐려지며 뿌연 안개에 섞임
+function buildClouds() {
+  const W = 1200, H = 250, S = 2, cv = document.createElement('canvas');
+  cv.width = W * S; cv.height = H * S;
+  const ctx = cv.getContext('2d'); ctx.scale(S, S);
+  let seed = 20210609; const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+  const puff = (g, x, y, r, rgb, a) => {
+    const gr = g.createRadialGradient(x, y, 0, x, y, r);
+    gr.addColorStop(0, `rgba(${rgb},${a})`); gr.addColorStop(.55, `rgba(${rgb},${a * .72})`); gr.addColorStop(1, `rgba(${rgb},0)`);
+    g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+  };
+  const one = (cx, base, w, op) => {
+    const h = w * .4, pad = w * .12, c = document.createElement('canvas');
+    c.width = Math.ceil((w + pad * 2) * S); c.height = Math.ceil((h + pad * 2) * S);
+    const g = c.getContext('2d'); g.scale(S, S); g.translate(pad, pad);
+    // 큰 봉우리 몇 개로 윤곽을 잡고, 그 안을 솜뭉치로 채움
+    const humps = []; const nh = 2 + Math.floor(rnd() * 3);
+    for (let i = 0; i < nh; i++) humps.push([.18 + .64 * ((i + rnd()) / nh), .14 + .2 * rnd(), .45 + .55 * rnd()]);
+    const top = (u) => Math.max(.12 * Math.sin(Math.PI * u), ...humps.map(([c0, s0, hh]) => { const q = (u - c0) / s0; return q * q < 1 ? hh * Math.sqrt(1 - q * q) : 0; }));
+    const P = [];
+    for (let j = 0; j < 46; j++) {
+      const u = .04 + .92 * rnd(), e = top(u), yv = Math.pow(rnd(), 1.3) * e;
+      P.push([u * w, h - yv * h * .86, w * (.045 + .06 * rnd()) * (.55 + .6 * e), yv / Math.max(.2, e)]);
+    }
+    for (const [x, y, r] of P) puff(g, x, y - r * .25, r, '255,255,255', .9);
+    // 속·밑 그늘 (하늘빛), 그 위에 윗부분 솜뭉치를 다시 밝게 → 볼록한 느낌
+    g.globalCompositeOperation = 'source-atop';
+    const sh = g.createLinearGradient(0, h * .2, 0, h);
+    sh.addColorStop(0, 'rgba(168,208,242,0)'); sh.addColorStop(.6, 'rgba(160,204,242,.5)'); sh.addColorStop(1, 'rgba(126,184,236,.85)');
+    g.fillStyle = sh; g.fillRect(-pad, 0, w + pad * 2, h + pad);
+    for (const [x, y, r, k] of P) if (k > .45) puff(g, x - r * .1, y - r * .55, r * .8, '255,255,255', .55);
+    // 밑변은 반듯하게 잘리며 하늘에 녹아듦
+    g.globalCompositeOperation = 'destination-out';
+    const er = g.createLinearGradient(0, h * .78, 0, h + pad * .4);
+    er.addColorStop(0, 'rgba(0,0,0,0)'); er.addColorStop(.6, 'rgba(0,0,0,.8)'); er.addColorStop(1, 'rgba(0,0,0,1)');
+    g.fillStyle = er; g.fillRect(-pad, h * .78, w + pad * 2, h * .22 + pad);
+    ctx.globalAlpha = op;
+    ctx.drawImage(c, cx - w / 2 - pad, base - h - pad, w + pad * 2, h + pad * 2);
+    ctx.globalAlpha = 1;
+  };
+  // 세 줄 (먼 구름부터): 아래 줄은 작고 흐리게, 위 줄은 크고 또렷하게
+  for (const [y0, y1, w0, w1, cnt, op] of [[150, 176, 50, 95, 11, .5], [104, 138, 95, 160, 7, .8], [58, 96, 160, 270, 5, .97]]) {
+    for (let i = 0; i < cnt; i++) one(((i + .15 + .7 * rnd()) / cnt) * W, y0 + rnd() * (y1 - y0), w0 + rnd() * (w1 - w0), op * (.82 + .18 * rnd()));
+  }
+  // 지평선 쪽 뿌연 안개
+  const hz = ctx.createLinearGradient(0, 120, 0, H);
+  hz.addColorStop(0, 'rgba(238,248,253,0)'); hz.addColorStop(.7, 'rgba(238,248,253,.4)'); hz.addColorStop(1, 'rgba(238,248,253,0)');
+  ctx.fillStyle = hz; ctx.fillRect(0, 120, W, H - 120);
+  $('#clouds').appendChild(cv);
+}
+
 async function main() {
   document.body.classList.toggle('sky-blue', (cfg.sky || 'blue') !== 'white');
+  if ((cfg.sky || 'blue') !== 'white') buildClouds();
   await Promise.all(['300 20px "NanumBarunLocal"', '400 20px "NanumBarunLocal"', '700 20px "NanumBarunLocal"', '400 20px "NanumBarunGothic"', '700 20px "NanumBarunGothic"']
     .map((f) => document.fonts.load(f, '역도착').catch(() => {})));
   scene = new SrtScene($('#gl'), cfg, route);

@@ -25,12 +25,15 @@ body.srt #stage { background: #e8e9ec; }
 .logo.missing { display: flex; align-items: center; justify-content: center; font-family: var(--ng); font-weight: 800; color: var(--bi); font-style: italic; }
 .sr-logo.missing { color: #1d4aa8; font-style: normal; }
 
-/* 오른쪽 위 날짜·시각 */
+/* 맨 위 검은 띠 + 오른쪽 날짜·시각 (영상: 로고가 나올 때 위에서 미끄러져 내려와 감속하며 멈춤) */
+#topbar { inset: 0 0 auto 0 !important; height: 28px; background: #070b18; pointer-events: none; }
 body.srt #clock.srt-clock {
-  left: auto; right: 14px; top: 4px; bottom: auto; width: auto; height: auto; text-align: right;
-  color: #3a3d42; font-family: var(--ng); font-size: 15px; font-weight: 700; text-shadow: none; letter-spacing: 0;
+  left: auto; right: 14px; top: 0; bottom: auto; width: auto; height: 28px; line-height: 28px; text-align: right;
+  color: #fff; font-family: var(--ng); font-size: 15px; font-weight: 700; text-shadow: none; letter-spacing: 0;
 }
-body.srt #clock.srt-clock.on-dark { color: #fff; }
+#topbar, body.srt #clock.srt-clock { transition: transform .6s cubic-bezier(.1, .8, .2, 1); }
+#topbar.bar-up, body.srt #clock.srt-clock.bar-up { transform: translateY(-110%); }
+#topbar.bar-now, body.srt #clock.srt-clock.bar-now { transition: none; }
 
 /* SR 로고 화면 (흰 바탕 가운데) */
 #logoScreen { background: #f7f7f7; display: flex; align-items: center; justify-content: center; opacity: 0; }
@@ -47,8 +50,10 @@ body.srt #clock.srt-clock.on-dark { color: #fff; }
 #clouds::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 34%; background: linear-gradient(180deg, rgba(196,203,212,.75), rgba(226,230,236,.45) 45%, rgba(244,245,247,0)); }
 #clouds i { position: absolute; top: -30px; height: 120px; border-radius: 50%; background: radial-gradient(closest-side, rgba(255,255,255,.95), rgba(255,255,255,.75) 60%, rgba(255,255,255,0)); animation: srtcloud 80s linear infinite alternate; }
 /* 파란 하늘 (config.js sky: 'blue') */
-.sky-blue #clouds::before { height: 40%; background: linear-gradient(180deg, rgba(58,152,228,.96), rgba(112,188,240,.8) 40%, rgba(190,228,248,.35) 75%, rgba(230,245,252,0)); }
-.sky-blue #clouds i { background: radial-gradient(closest-side, rgba(255,255,255,.98), rgba(255,255,255,.82) 55%, rgba(255,255,255,0)); }
+.sky-blue #clouds::before { height: 38%; background: linear-gradient(180deg, rgba(40,134,222,.98), rgba(96,176,238,.85) 35%, rgba(170,216,246,.45) 70%, rgba(230,245,252,0)); }
+.sky-blue #clouds i { display: none; }
+#clouds canvas { position: absolute; left: 0; top: 0; width: 118%; height: auto; animation: srtcloudsky 160s linear infinite alternate; }
+@keyframes srtcloudsky { from { transform: translateX(0); } to { transform: translateX(-15%); } }
 #clouds i:nth-child(1) { left: -6%; width: 30%; top: -8px; }
 #clouds i:nth-child(2) { left: 16%; width: 24%; top: 34px; height: 70px; opacity: .85; animation-duration: 95s; }
 #clouds i:nth-child(3) { left: 36%; width: 32%; top: -28px; }
